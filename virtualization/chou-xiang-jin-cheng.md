@@ -22,9 +22,9 @@
 
 <figure><img src="../.gitbook/assets/load_program_to_proc.jpg" alt=""><figcaption></figcaption></figure>
 
-在早起的操作系统中，
+在早起的操作系统中，加载的这个过程是尽早（eagerly）完成，即在运行程序之前全部完成。现代操作系统则是惰性（lazily）执行该过程，即仅在程序运行期间按需加载代码或数据片段。这个过程涉及到内存虚拟化，后面的对应章节会展开具体讲解。
 
-
+加载到内存后操作系统在运行之前还会执行其他一些操作，比如为程序运行时的栈（run-time stack 或 stack）、堆（heap）、局部变量等分配一些内存。此外还会执行一些其他初始化任务，特别是输入输出（I/O）相关的任务，例如：stdin、stdout、stderr。
 
 
 
