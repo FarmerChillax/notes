@@ -7,3 +7,8 @@
 * [第四章-抽象：进程](virtualization/proc.md)
 * [第五章-插叙：进程 API](virtualization/proc-api.md)
 * [第六章-机制：受限直接执行](virtualization/mechanism.md)
+
+## 第二部分（并发） <a href="#concurrency" id="concurrency"></a>
+
+* [第二十六章-并发介绍](concurrency/introduce.md)
+* [第二十七章-插叙：线程 API](concurrency/thread-api.md)
