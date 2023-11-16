@@ -12,3 +12,4 @@
 
 * [第二十六章-并发介绍](concurrency/introduce.md)
 * [第二十七章-插叙：线程 API](concurrency/thread-api.md)
+* [第二十八章-锁](concurrency/lock.md)
