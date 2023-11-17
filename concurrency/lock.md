@@ -157,6 +157,126 @@ int CompareAndSwap(int *ptr, int expected, int new) {
 
 
 
+### 链接的加载和条件式存储指令
+
+一些平台提供了实现临界区的一对指令：链接的加载（load-lionked）和条件式存储（store-conditional）可以用来配合使用，实现其他并发结构。
+
+```c
+int LoadLinked(int *ptr) {
+    return *ptr;
+}
+
+int StoreConditional(int *ptr, int value) {
+    if (no one has updated *ptr since the LoadLinked to this address) {
+        *ptr = value;
+        return 1; // success!
+    } else {
+        return 0; // failed to update
+    }
+}
+```
+
+**条件式存储**（store-conditional）指令，只有上一次执行**LoadLinked**的地址在期间**都没有更新**时， 才会成功，同时更新了该地址的值
+
+先通过 **LoadLinked** 尝试获取锁值，如果判断到锁被释放了，就执行**StoreConditional**判断在「执行完」**LoadLinked**到**StoreConditional**「执行前」ptr 有没有被**更新**，没有被更新则说明**没有**其他线程来抢，可以进临界区，有更新则说明已经被其他线程抢走了，继续重复本段落所述内容循环：
+
+```c
+void lock(lock_t *lock) {
+    while (1) {
+        while (LoadLinked(&lock->flag) == 1)
+            ; // spin until it's zero
+        if (StoreConditional(&lock->flag, 1) == 1)
+            return; // if set-it-to-1 was a success: all done
+                // otherwise: try it all over again
+    }
+}
+
+void unlock(lock_t *lock) {
+    lock->flag = 0;
+}
+```
+
+
+
+### 硬件支持：获取并增加
+
+**获取并增加**（fetch-and-add）指令能**原子地返回特定地址的旧值**，并且让该值**自增一**。
+
+```c
+int FetchAndAdd(int *ptr) {
+    int old = *ptr;
+    *ptr = old + 1;
+    return old;
+}
+typedef struct lock_t {
+    int ticket;
+    int turn;
+} lock_t;
+
+void lock_init(lock_t *lock) {
+    lock->ticket = 0;
+    lock->turn = 0;
+}
+
+void lock(lock_t *lock) {
+    // 开始挂号，获取当前号码。然后号码加1，保证每个人号码都不同
+    int myturn = FetchAndAdd(&lock->ticket);
+    // 等待被叫号
+    while (lock->turn != myturn)
+        ; // spin
+}
+
+void unlock(lock_t *lock) {
+    // 只需要加1功能，不用返回旧值
+    FetchAndAdd(&lock->turn);
+}
+```
+
+这个方案使用了两个变量来构建锁（ticket和turn），基本操作也很简单：每次进入 lock，就获取当前ticket`值`，相当于**挂号**，然后全局 ticket 本身会**自增一**，因此后续线程都会获得属于自己的唯一 ticket值，**lock->turn**表示当前**叫号值**，叫到号的运行。unlock 时递增lock->turn更新**叫号值**就行（也就是叫下一个号）。这种返回式保证了公平性，相当于每个线程排队运行（FIFO）。
+
+### 自旋过多：怎么办
+
+一个线程会一直自旋检查一个**不会改变**的值，浪费掉整个时间片！如果有 N 个线程去竞争一个锁，情况会更糟糕。同样的场景下，会浪费 **N−1 个时间片**，只是自旋并等待一个线程释放该锁。
+
+如何让锁不会不必要地自旋，浪费 CPU 时间？要解决这个问题，只有硬件支持是不够的，我们还需要操作系统的支持！
+
+### 使用对列：休眠替代自旋
+
+需要一个队列来保存等待锁的线程，上锁时发现锁已被持有，则入队并让调用线程休眠，解锁时从队列中取出一个线程唤醒。Solaris 中 `park()`能够让调用线程休眠，`unpark(threadID)`则会唤醒 threadID 标识的线程。
+
+### 两阶段锁
+
+
+
+
+
+
+
+
+
+\
+\
+\
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
