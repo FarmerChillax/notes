@@ -14,3 +14,4 @@
 * [第二十七章-插叙：线程 API](concurrency/thread-api.md)
 * [第二十八章-锁](concurrency/lock.md)
 * [第二十九章-基于锁的并发数据结构](concurrency/data-struct-base-with-lock.md)
+* [第三十章-条件变量](concurrency/conditional-variable.md)
