@@ -87,7 +87,7 @@ int get(counter_t *c)
 
 在这个例子中，阈值 S 设置为 5，4 个 CPU 上分别有一个线程更新局部计数器 L1,…, L4。随着时间增加，全局计数器 G 的值也会记录下来。每一段时间，局部计数器可能会增加。如果局部计数值增加到阈值 S，就把局部值转移到全局计数器，局部计数器清零。
 
-
+<figure><img src="../.gitbook/assets/image (2).png" alt=""><figcaption></figcaption></figure>
 
 ```c
 typedef struct counter_t
