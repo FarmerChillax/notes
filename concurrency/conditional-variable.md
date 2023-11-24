@@ -68,9 +68,157 @@ unlock(&mutex);// 退出临界区
 
 本章要面对的下一个问题，就是生产者/消费者问题（producer/consumer），有的也叫「有界缓冲区（bounded buffer）」问题。
 
+```c
+cond_t cond;
+mutex_t mutex;
+
+void *producer(void *arg)
+{
+    int i;
+    for (i = 0; i < loops; i++)
+    {
+        Pthread_mutex_lock(&mutex);           // p1
+        // 名义上的临界区，在lock之间
+        if (count == 1)                       // p2
+            Pthread_cond_wait(&cond, &mutex); // p3
+        // 实际上的临界区，由于wait会释放锁退出临界区(被唤醒后重新上锁)，
+        // 所以从这里开始才是真正的临界区
+        put(i);                               // p4
+        Pthread_cond_signal(&cond);           // p5
+        Pthread_mutex_unlock(&mutex);         // p6
+    }
+}
+
+void *consumer(void *arg)
+{
+    int i;
+    for (i = 0; i < loops; i++)
+    {
+        Pthread_mutex_lock(&mutex);           // c1
+        // 1. 此处存在问题，当有两个消费者（Cus1,Cus2）时，其中Cus1进入休眠，
+        // Cus2正好在生产者生产后执行get把count消费掉，此时
+        // 生产者又调用signal唤醒Cus1休眠的，直接执行了get发现
+        // 没有count了,所以要把if改成while，wait出来还要再
+        // 判断一次count
+        // 2. 使用while带来另一个问题，Cus1消费后本该唤醒生产者，
+        // 但如果唤醒了Cus2线程，因为没东西消费，Cus2也会等待，
+        // 就会导致三个线程都在等待中。解决方法是设置两个条件变量，
+        // 保证消费者唤醒生产者，生产者唤醒消费者
+        if (count == 0)                       // c2
+            Pthread_cond_wait(&cond, &mutex); // c3
+        int tmp = get();                      // c4
+        Pthread_cond_signal(&cond);           // c5
+        Pthread_mutex_unlock(&mutex);         // c6
+        printf("%d\n", tmp);
+    }
+}
+```
+
+可以看到上面的代码中使用 `if` 作为判断显然是不合理的，具体原因我写在注释中了。为此我们可以总结出一个关于条件变量使用的简单规则：「总是`使用 while 循环`（always use while loop）」。
+
+其次便是**通知是需要指向性**的，消费者不应该唤醒消费者，而应该只唤醒生产者，反之亦然。
+
+下面我们使用 `while` 来修改代码：
+
+```c
+int buffer[MAX];
+int fill = 0;
+int use = 0;
+int count = 0;
+
+void put(int value)
+{
+    buffer[fill] = value;
+    fill = (fill + 1) % MAX;
+    count++;
+}
+
+int get()
+{
+    int tmp = buffer[use];
+    use = (use + 1) % MAX;
+    count--;
+    return tmp;
+}
+cond_t empty, fill;
+mutex_t mutex;
+
+void *producer(void *arg)
+{
+    int i;
+    for (i = 0; i < loops; i++)
+    {
+        Pthread_mutex_lock(&mutex);            // p1
+        while (count == MAX)                   // p2
+            Pthread_cond_wait(&empty, &mutex); // p3
+        put(i);                                // p4
+        Pthread_cond_signal(&fill);            // p5
+        Pthread_mutex_unlock(&mutex);          // p6
+    }
+}
+
+void *consumer(void *arg)
+{
+    int i;
+    for (i = 0; i < loops; i++)
+    {
+        Pthread_mutex_lock(&mutex);           // c1
+        while (count == 0)                    // c2
+            Pthread_cond_wait(&fill, &mutex); // c3
+        int tmp = get();                      // c4
+        Pthread_cond_signal(&empty);          // c5
+        Pthread_mutex_unlock(&mutex);         // c6
+        printf("%d\n", tmp);
+    }
+}
+```
 
 
 
+### 覆盖条件
+
+下面来看一个例子，这是一个简单的多线程内存分配库，以下代码用于内存分配管理，free 后会唤醒 allocate 时因空间不够而等待的线程：
+
+```c
+// how many bytes of the heap are free?
+int bytesLeft = MAX_HEAP_SIZE;
+
+// need lock and condition too
+cond_t c;
+mutex_t m;
+
+void *
+allocate(int size)
+{
+    Pthread_mutex_lock(&m);
+    while (bytesLeft < size)
+        Pthread_cond_wait(&c, &m);
+    void *ptr = ...; // get mem from heap
+    bytesLeft -= size;
+    Pthread_mutex_unlock(&m);
+    return ptr;
+}
+
+void free(void *ptr, int size)
+{
+    Pthread_mutex_lock(&m);
+    bytesLeft += size;
+    Pthread_cond_signal(&c); // whom to signal??
+    Pthread_mutex_unlock(&m);
+}
+```
+
+考虑以下场景：假设目前没有空闲内存，线程 Ta 调用 `allocate(100)` ，接着线程 Tb 请求较少的内存，调用 `allocate(10)` 。Ta 和 Tb 都等待在条件上并睡眠，没有足够的空闲内存来满足它们的请求。
+
+假定第三个线程 Tc 调用了 `free(50)`，当他发出信号唤醒等待线程时，因为不知道唤醒哪个线程，可能不会唤醒申请 10 字节的 Tb 线程，而是唤醒 Ta 线程，但该线程由于内存不够仍然等待。因此图中的代码无法正常的工作。
+
+解决的方案也很直接：用`使用 pthread_cond_broadcast()`唤醒所有等待的线程。这样做，确保了所有应该唤醒的线程都被唤醒。当然，不利的一面是可能会影响性能。Lampson 和 Redell 把这种**条件变量**叫作**覆盖条件**（covering condition），因为它能覆盖所有需要唤醒线程的场景（保守策略）
+
+### 小结
+
+这一章引入了锁之外的另一个重要同步原语：**条件变量**。当某些程序状态不符合要求时，让线程进入休眠状态，避免不必要的空转（spin）
+
+> 需要注意，条件变量并不是不需要锁。
 
 
 
