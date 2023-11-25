@@ -10,7 +10,7 @@ OSTEP 的第二部分将介绍并发相关的内容，因此本章将首先介�
 
 线程和进程之间另一个主要的区别在于栈。在传统的进程内存模型中，只有一个栈，通常位于地址空间的底部。而多线程的进程中，每个线程独立运行，因此地址空间中不只有一个栈，而是每个线程都有一个栈。如下图所示：
 
-<figure><img src="../.gitbook/assets/image (1).png" alt="" width="563"><figcaption></figcaption></figure>
+<figure><img src="../.gitbook/assets/image (1) (1).png" alt="" width="563"><figcaption></figcaption></figure>
 
 
 
