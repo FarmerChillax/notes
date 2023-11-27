@@ -170,7 +170,7 @@ void insert(int value)
 
 #### 通过调度避免死锁
 
-只要 T1 和 T2 (需要同一个锁的线程)不同时运行，就不会产生死锁。但这样就失去了并发性
+除了死锁预防外，有的场景死锁避免（avoidance）可能会更加合适，通过合理的调度避免产生死锁。比如下面的这个例子中，只要 T1 和 T2 (需要同一个锁的线程)不同时运行，就不会产生死锁。但这样就失去了并发性
 
 [![F32.1](https://hjk.life/assets/img/2022-06-16-operating-systems-26/F32.1.jpg)](https://hjk.life/assets/img/2022-06-16-operating-systems-26/F32.1.jpg)
 
