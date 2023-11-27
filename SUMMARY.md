@@ -16,3 +16,4 @@
 * [第二十九章-基于锁的并发数据结构](concurrency/data-struct-base-with-lock.md)
 * [第三十章-条件变量](concurrency/conditional-variable.md)
 * [第三十一章-信号量](concurrency/signal.md)
+* [第三十二章-常见并发问题](concurrency/common-concurrency-issues.md)
