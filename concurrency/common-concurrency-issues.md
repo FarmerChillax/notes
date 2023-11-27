@@ -85,10 +85,86 @@ v1.AddAll(v2);
 
 #### 预防死锁
 
-* 循环等待
-* 持有并等待
-* 非抢占
-* 互斥
+* 循环等待：这个方法是最实用和常用的方法，就是让代码不产生循环等待的情况。最直接的方法就是获取锁的时候提供一个**全序**（total ordering），通过严格的加锁顺序避免了循环等待。
+* 持有并等待：这个方法通过原子地抢锁来避免死锁问题，也就是说在用一把大锁把几个锁保护起来，但这么做可能会影响性能。
+* 非抢占：解决非抢占就是要让线程能占用其他线程没在用的锁，不能占着茅坑不拉屎。具体来说`trylock()` 函数会尝试获取锁，当锁被占有时则返回-1。
+* 互斥：如果不存在锁那么便不存在死锁。通过强大的硬件指令，我们可以构造出**不需要锁**的数据结构，这个强大的硬件指令就是「比较并交换（compare-and-swap）」。
+
+下面是一个「比较并交换」的例子，在 `*address` 的值等于 `expected` 值时，将其赋值为 new：
+
+```c
+int CompareAndSwap(int *address, int expected, int new)
+{
+    if (*address == expected)
+    {
+        *address = new;
+        return 1; // success
+    }
+    return 0; // failure
+}
+```
+
+假定我们想原子地给某个值增加特定的数量:
+
+```c
+void AtomicIncrement(int *value, int amount)
+{
+    do
+    {
+        int old = *value;
+    } while (CompareAndSwap(value, old, old + amount) == 0);
+
+    /** 无同步操作
+        int old = *value;
+        *value = old + amount;
+    */
+}
+```
+
+一个更复杂的例子：**链表插入**。这是在链表头部插入元素的代码：
+
+```c
+void insert(int value)
+{
+    node_t *n = malloc(sizeof(node_t));
+    assert(n != NULL);
+    n->value = value;
+    n->next = head;
+    head = n;
+}
+```
+
+通过**加锁**解决同步：
+
+```c
+void insert(int value)
+{
+    node_t *n = malloc(sizeof(node_t));
+    assert(n != NULL);
+    n->value = value;
+    lock(listlock); // begin critical section
+    n->next = head;
+    head = n;
+    unlock(listlock); // end of critical section
+}
+```
+
+用**比较并交换指令**（compare-and-swap)来实现插入操作:
+
+```c
+void insert(int value)
+{
+    node_t *n = malloc(sizeof(node_t));
+    assert(n != NULL);
+    n->value = value;
+    do
+    {
+        n->next = head;
+    } while (CompareAndSwap(&head, n->next, n) == 0);
+}
+```
+
+这段代码，首先把 next 指针指向当前的链表头（head），然后试着把新结点交换到链表头。但是，如果此时其他的线程成功地修改了 head 的值，这里的交换就会失败，导致这个线程根据新的 head 值重试。
 
 
 
