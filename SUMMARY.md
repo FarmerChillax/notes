@@ -17,3 +17,4 @@
 * [第三十章-条件变量](concurrency/conditional-variable.md)
 * [第三十一章-信号量](concurrency/signal.md)
 * [第三十二章-常见并发问题](concurrency/common-concurrency-issues.md)
+* [第三十三章-基于事件的并发（进阶）](concurrency/event-based-concurrency.md)
